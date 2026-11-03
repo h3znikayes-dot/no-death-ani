@@ -6,7 +6,6 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
-import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,12 +21,14 @@ public class DeadWalking implements ModInitializer {
     public void onInitialize() {
         PayloadTypeRegistry.clientboundPlay().register(FreezePayload.TYPE, FreezePayload.CODEC);
 
+        // Start of a death check (a totem of undying can still cancel it): just remember how it looked.
         ServerLivingEntityEvents.ALLOW_DEATH.register((entity, source, amount) -> {
-            if (entity instanceof ServerPlayer player) {
-                Corpses.spawn(player);
-            }
+            Corpses.snapshot(entity);
             return true;
         });
+
+        // Only runs when the entity really died (not when a totem saved it): spawn the body now.
+        ServerLivingEntityEvents.AFTER_DEATH.register((entity, source) -> Corpses.finish(entity));
 
         ServerLivingEntityEvents.ALLOW_DAMAGE.register((entity, source, amount) -> !Corpses.isCorpse(entity));
 
