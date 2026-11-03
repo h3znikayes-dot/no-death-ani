@@ -2,6 +2,8 @@ package com.example.deadwalking;
 
 import com.mojang.authlib.GameProfile;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -49,8 +51,8 @@ final class Corpses {
         if (player.isSpectator() || !(player.level() instanceof ServerLevel level)) {
             return;
         }
-        Mannequin corpse = EntityType.MANNEQUIN.create(level, EntitySpawnReason.TRIGGERED);
-        if (corpse == null) {
+        EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.getValue(Identifier.fromNamespaceAndPath("minecraft", "mannequin"));
+        if (!(type.create(level, EntitySpawnReason.TRIGGERED) instanceof Mannequin corpse)) {
             return;
         }
 
@@ -84,7 +86,6 @@ final class Corpses {
 
         // --- make it a corpse: 0 health makes every client play the vanilla "fall over" animation
         corpse.setHealth(0.0F);
-        corpse.setInvulnerable(true);
 
         level.addFreshEntity(corpse);
 
