@@ -52,7 +52,10 @@ final class Corpses {
             return;
         }
         EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.getValue(Identifier.fromNamespaceAndPath("minecraft", "mannequin"));
-        if (!(type.create(level, EntitySpawnReason.TRIGGERED) instanceof Mannequin corpse)) {
+        Object made = type.create(level, EntitySpawnReason.TRIGGERED);
+        DeadWalking.LOGGER.info("Dead Walking: player died, made {} (type {})", made, BuiltInRegistries.ENTITY_TYPE.getKey(type));
+        if (!(made instanceof Mannequin corpse)) {
+            DeadWalking.LOGGER.warn("Dead Walking: that is not a Mannequin, so no body was spawned.");
             return;
         }
 
@@ -83,9 +86,6 @@ final class Corpses {
                 corpse.setItemSlot(slot, stack.copy());
             }
         }
-
-        // --- make it a corpse: 0 health makes every client play the vanilla "fall over" animation
-        corpse.setHealth(0.0F);
 
         level.addFreshEntity(corpse);
 
@@ -140,10 +140,17 @@ final class Corpses {
                 e.level().broadcastEntityEvent(e, (byte) 60);
                 e.discard();
                 it.remove();
-            } else {
-                e.deathTime = 0; // stops vanilla's own 20-tick death cleanup from removing it early
             }
         }
+    }
+
+    static boolean isCorpse(net.minecraft.world.entity.Entity entity) {
+        for (Corpse c : ACTIVE) {
+            if (c.entity() == entity) {
+                return true;
+            }
+        }
+        return false;
     }
 
     static void forget(UUID id) {
@@ -161,6 +168,7 @@ final class Corpses {
     private static void copyProfile(Mannequin corpse, GameProfile profile) {
         invoke(corpse, "setProfile", ResolvableProfile.class, ResolvableProfile.createResolved(profile));
         invoke(corpse, "setHideDescription", boolean.class, true);
+        invoke(corpse, "setImmovable", boolean.class, true);
     }
 
     private static void invoke(Object target, String name, Class<?> argType, Object arg) {
