@@ -16,19 +16,20 @@ public class DeadWalking implements ModInitializer {
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
     /** How long a body stays, in server ticks (20 ticks = 1 second). */
-    public static final int CORPSE_TICKS = 50;
+    public static final int CORPSE_TICKS = 40;
 
     @Override
     public void onInitialize() {
         PayloadTypeRegistry.clientboundPlay().register(FreezePayload.TYPE, FreezePayload.CODEC);
 
-        // Runs at the very start of death, before the inventory is dropped, so we can copy the gear.
         ServerLivingEntityEvents.ALLOW_DEATH.register((entity, source, amount) -> {
             if (entity instanceof ServerPlayer player) {
                 Corpses.spawn(player);
             }
-            return true; // never cancel the death itself
+            return true;
         });
+
+        ServerLivingEntityEvents.ALLOW_DAMAGE.register((entity, source, amount) -> !Corpses.isCorpse(entity));
 
         ServerTickEvents.END_SERVER_TICK.register(Corpses::tick);
 
