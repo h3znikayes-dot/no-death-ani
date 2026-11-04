@@ -93,4 +93,165 @@ public final class FrozenLimbs {
         }
     }
 
-    private
+    private static void scan(Minecraft mc) {
+        ClientLevel level = mc.level;
+        if (level == null) {
+            LOOKS.clear();
+            HANDLED.clear();
+            return;
+        }
+        Set<Integer> seen = new HashSet<>();
+        List<LivingEntity> justDied = new ArrayList<>();
+
+        for (Entity entity : level.entitiesForRendering()) {
+            if (!(entity instanceof LivingEntity living) || BODIES.containsKey(living.getId())) {
+                continue;
+            }
+            if (!(living instanceof Player || living instanceof Mob) || isBoss(living)) {
+                continue;
+            }
+            int id = living.getId();
+            seen.add(id);
+            if (living.isDeadOrDying()) {
+                if (HANDLED.add(id)) {
+                    justDied.add(living);
+                }
+            } else {
+                HANDLED.remove(id);
+                if (living.isSpectator() || living.isInvisible()) {
+                    LOOKS.remove(id);
+                } else {
+                    remember(living);
+                }
+            }
+        }
+        LOOKS.keySet().retainAll(seen);
+        HANDLED.retainAll(seen);
+
+        // spawn after the loop so we never change the entity list while reading it
+        for (LivingEntity src : justDied) {
+            Look look = LOOKS.get(src.getId());
+            if (look != null) {
+                spawn(level, src, look);
+            }
+        }
+    }
+
+    private static boolean isBoss(LivingEntity e) {
+        String path = BuiltInRegistries.ENTITY_TYPE.getKey(e.getType()).getPath();
+        return path.equals("ender_dragon") || path.equals("wither"); // special death sequences
+    }
+
+    private static void remember(LivingEntity e) {
+        Look l = LOOKS.computeIfAbsent(e.getId(), id -> new Look());
+        l.x = e.getX();
+        l.y = e.getY();
+        l.z = e.getZ();
+        l.xRot = e.getXRot();
+        l.yBody = e.yBodyRot;
+        l.yHead = e.yHeadRot;
+        l.pose = e.getPose();
+        l.walkPos = e.walkAnimation.position();
+        l.walkSpeed = e.walkAnimation.speed();
+        l.gear.clear();
+        for (EquipmentSlot slot : EquipmentSlot.values()) {
+            ItemStack stack = e.getItemBySlot(slot);
+            if (!stack.isEmpty()) {
+                l.gear.put(slot, stack);
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------- building the body
+
+    private static void spawn(ClientLevel level, LivingEntity src, Look look) {
+        LivingEntity body = src instanceof Player player ? playerBody(level, player) : mobBody(level, src);
+        if (body == null) {
+            return;
+        }
+
+        body.setInvisible(false);
+        body.setHealth(body.getMaxHealth());
+        body.setNoGravity(true);
+        body.noPhysics = true;
+        body.setSilent(true);
+        body.hurtTime = RED_TICKS;
+        body.hurtDuration = RED_TICKS;
+
+        body.setPos(look.x, look.y, look.z);
+        body.setYRot(look.yBody);
+        body.setXRot(look.xRot);
+        body.yRotO = look.yBody;
+        body.xRotO = look.xRot;
+        body.yBodyRot = look.yBody;
+        body.yBodyRotO = look.yBody;
+        body.yHeadRot = look.yHead;
+        body.yHeadRotO = look.yHead;
+
+        Pose pose = look.pose;
+        if (pose == Pose.SLEEPING || pose == Pose.DYING) {
+            pose = Pose.STANDING;
+        }
+        body.setPose(pose);
+
+        for (Map.Entry<EquipmentSlot, ItemStack> e : look.gear.entrySet()) {
+            body.setItemSlot(e.getKey(), e.getValue().copy());
+        }
+
+        body.setId(nextId--);
+        level.addEntity(body);
+        BODIES.put(body.getId(), new Body(body, new Frozen(look.walkPos, look.walkSpeed), ticks));
+
+        // Hide the real dying body (on this client only).
+        src.setInvisible(true);
+    }
+
+    private static LivingEntity playerBody(ClientLevel level, Player player) {
+        EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.getValue(Identifier.fromNamespaceAndPath("minecraft", "mannequin"));
+        if (!(type.create(level, EntitySpawnReason.TRIGGERED) instanceof Mannequin m)) {
+            DeadWalking.LOGGER.warn("Dead Walking: could not create a Mannequin body.");
+            return null;
+        }
+        m.setCustomName(player.getName());
+        GameProfile profile = player.getGameProfile();
+        invoke(m, "setProfile", ResolvableProfile.class, ResolvableProfile.createResolved(profile));
+        invoke(m, "setHideDescription", boolean.class, true);
+        invoke(m, "setImmovable", boolean.class, true);
+        return m;
+    }
+
+    private static LivingEntity mobBody(ClientLevel level, LivingEntity src) {
+        if (!(src.getType().create(level, EntitySpawnReason.TRIGGERED) instanceof LivingEntity body)) {
+            return null;
+        }
+        // Copy everything visible: colour, variant, size, baby, name, fire, ...
+        var values = src.getEntityData().getNonDefaultValues();
+        if (values != null) {
+            body.getEntityData().assignValues(values);
+        }
+        if (body instanceof Mob mob) {
+            mob.setNoAi(true);
+        }
+        return body;
+    }
+
+    public static void clear() {
+        BODIES.clear();
+        LOOKS.clear();
+        HANDLED.clear();
+    }
+
+    private static void invoke(Object target, String name, Class<?> argType, Object arg) {
+        for (Class<?> c = target.getClass(); c != null; c = c.getSuperclass()) {
+            try {
+                Method m = c.getDeclaredMethod(name, argType);
+                m.setAccessible(true);
+                m.invoke(target, arg);
+                return;
+            } catch (ReflectiveOperationException ignored) {
+                // keep walking up the class hierarchy
+            }
+        }
+        DeadWalking.LOGGER.warn("Mannequin.{} not found; the body may use the default skin or label.", name);
+    }
+}
