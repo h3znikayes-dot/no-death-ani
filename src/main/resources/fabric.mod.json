@@ -3,12 +3,11 @@
   "id": "deadwalking",
   "version": "${version}",
   "name": "Dead Walking",
-  "description": "When a player dies, their body stays for 50 ticks, frozen in the exact pose they died in (mid-stride, sneaking, swimming, with their gear and skin).",
+  "description": "When a player or mob dies, a copy of their body stays for 40 ticks, frozen in the exact pose they died in. Client-side only; works on any server.",
   "authors": [],
   "license": "MIT",
-  "environment": "*",
+  "environment": "client",
   "entrypoints": {
-    "main": ["com.example.deadwalking.DeadWalking"],
     "client": ["com.example.deadwalking.DeadWalkingClient"]
   },
   "mixins": [
