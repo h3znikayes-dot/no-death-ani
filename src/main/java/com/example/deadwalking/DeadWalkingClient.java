@@ -10,7 +10,7 @@ public class DeadWalkingClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         ClientPlayNetworking.registerGlobalReceiver(FreezePayload.TYPE, (payload, context) ->
-                FrozenLimbs.put(payload.entityId(), payload.walkPosition(), payload.walkSpeed()));
+                FrozenLimbs.spawn(context.client(), payload));
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> FrozenLimbs.tick());
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> FrozenLimbs.clear());
