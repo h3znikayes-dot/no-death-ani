@@ -3,7 +3,8 @@
   "package": "com.example.deadwalking.mixin",
   "compatibilityLevel": "JAVA_25",
   "client": [
-    "LivingEntityRendererMixin"
+    "LivingEntityRendererMixin",
+    "LivingEntityHitboxMixin"
   ],
   "injectors": {
     "defaultRequire": 1
